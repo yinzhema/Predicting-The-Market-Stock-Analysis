@@ -24,6 +24,9 @@ from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import zero_one_loss
+from matplotlib.colors import colorConverter
+from pylab import *
+from matplotlib.collections import LineCollection
 
 
 # fix random seed for reproducibility
@@ -121,7 +124,7 @@ def createModel ( modelType = 'LSTM', seqSize=1, featureSize=1 ):
 		svm_lin = SVC(kernel='linear', C=100, gamma='auto')
 		svm_poly = SVC(kernel='poly', C=100, gamma='auto', degree=3, coef0=1)
 
-		model = svm_rbf
+		model = svm_poly
 
 
 	return model
@@ -329,6 +332,34 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		plt.title ( sname + '-' + modelType + ' trade return {0:.2f}% vs market return {1:.2f}%'.format(rtest[-1]-100, rettsdata*100 ) )
 		plt.savefig ( sname + '-' + modelType + "-rate-price.jpeg" )
 		plt.show()
+        
+		copy, colors = [], []
+		bt = colorConverter.to_rgba('r')
+		gt = colorConverter.to_rgba('g')
+		for i in range(srdata.shape[0]):
+			r = ddata[i+len(trainPredict)+(look_back*2)+1,0]/100
+			if traPredict[i] > 0:    	# Predict price going up
+				if r > 0:			# Price goes up... good trade
+					colors.append(gt)
+				else:				# Price goes down... bad trade
+					colors.append(bt)
+			else:						# Predict price going down
+				if r > 0:			# Goes up... bad trade
+					colors.append(bt)
+				else:      			# Goes down.. good trade
+					colors.append(gt)
+			copy.append((i, srdata[i][0]))              
+     
+		# end for
+		segments = list(zip(copy[:-1], copy[1:]))
+		ax = axes(frameon=True)
+		LC = LineCollection(segments, colors=colors)
+		ax.add_collection(LC)
+		ax.set_xbound(lower=0.0, upper=max(copy, key = lambda tup: tup[0])[0] + 10)
+		ax.set_ybound(lower=0.0, upper=max(copy, key = lambda tup: tup[1])[1] + 30)
+		savefig( sname + '-' + modelType + "-good-bad-trades.jpeg")
+		show()
+        
 	else:
 		trPlot = np.zeros((len(data)))
 		trPlot[:] = np.nan
@@ -357,12 +388,12 @@ sname = 'AAPL'
 #sname = '^GSPC'
 look_back = 20
 modelType = 'LSTM'
-modelType = 'SVR'
-#modelType = 'SVM'
+# modelType = 'SVR'
+modelType = 'SVM'
 #modelType = 'LSTMC'
-#modelType = 'CNN'
+# modelType = 'CNN'
 
-trainX, trainY, testX, testY, data, ddata, scaler = create_sample(modelType, look_back=look_back, start=start)
+trainX, trainY, testX, testY, data, ddata, scaler = create_sample(modelType, look_back=look_back, start=start, sname=sname)
 
 model = createModel ( modelType, seqSize=look_back )
 model = trainModel ( modelType, model, trainX, trainY )
