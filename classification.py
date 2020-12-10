@@ -307,7 +307,7 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		plt.plot(tstPredictPlot, 'r-')
 		plt.grid(which='minor')
 		plt.title ( sname + '-' + modelType + ' testScore {0}'.format(testScore)  )
-		plt.savefig ( sname + '-' + modelType + "-rate.jpg" )
+		plt.savefig ( "images/" + sname + '-' + modelType + "-rate.jpg" )
 		plt.show()
 
 		# plot baseline and predictions
@@ -330,7 +330,7 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		plt.plot(tPlot, 'g--')
 		plt.plot(sPlot, 'r-')
 		plt.title ( sname + '-' + modelType + ' testScore {0}'.format(testScore)  )
-		plt.savefig ( sname + '-' + modelType + "-price.jpeg" )
+		plt.savefig ( "images/" + sname + '-' + modelType + "-price.jpeg" )
 		plt.show()
 	# end if modelType
 
@@ -384,7 +384,7 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		ax.add_collection(LC)
 		ax.set_xbound(lower=0.0, upper=max(copy, key = lambda tup: tup[0])[0] + 10)
 		ax.set_ybound(lower=0.0, upper=max(copy, key = lambda tup: tup[1])[1] + 30)
-		savefig( sname + '-' + modelType + "-good-bad-trades.jpeg")
+		savefig( "images/" + sname + '-' + modelType + "-good-bad-trades.jpeg")
 		show()
         
 	else:
@@ -404,7 +404,7 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		plt.plot(trPlot, 'g--')
 		plt.plot(srPlot, 'r-')
 		plt.title ( sname + '-' + modelType + ' trade return {0:.2f}% vs market return {1:.2f}%'.format(rtest[-1]-100, rettsdata*100 ) )
-		plt.savefig ( sname + '-' + modelType + "-rate-price.jpeg" )
+		plt.savefig ( "images/" + sname + '-' + modelType + "-rate-price.jpeg" )
 		plt.show()
 		
 
