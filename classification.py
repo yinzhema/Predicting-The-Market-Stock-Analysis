@@ -17,6 +17,7 @@ from keras.layers import BatchNormalization
 from keras.layers import Flatten
 from keras import utils
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 from sklearn.svm import SVR
@@ -24,20 +25,23 @@ from sklearn.svm import SVC
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import zero_one_loss
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.linear_model import SGDClassifier
+import xgboost as xgb
 from matplotlib.colors import colorConverter
 from pylab import *
 from matplotlib.collections import LineCollection
 
 
 # fix random seed for reproducibility
-np.random.seed(7)
+# np.random.seed(7)
 
 def create_dataset(modelType, dataset, rawdataset, look_back=1):
 	dataX, dataY = [], []
 	for i in range(len(dataset)-look_back-1):
 		a = dataset[i:(i+look_back), 0]
 		dataX.append(a)
-		if (modelType == "SVM") or (modelType == "LSTMC") or (modelType == "CNN"):
+		if (modelType == "SVM") or (modelType == "LSTMC") or (modelType == "CNN") or (modelType == "GDB"):
 			if (rawdataset[i + look_back, 0] > 0):
 				dataY.append(1)
 			else:
@@ -71,7 +75,7 @@ def create_sample( modeType, sname="AAPL", look_back=20, start="2000-01-01", end
 	rawtrain, rawtest = ddata[0:train_size,:], ddata[train_size:len(ddata),:]
 	train, test = ddata[0:train_size,:], ddata[train_size:len(ddata),:]
 
-	scaler = MinMaxScaler(feature_range=(-1, 1))
+	scaler = StandardScaler()
 	train = scaler.fit_transform(train)
 	test = scaler.transform(test)
 
@@ -114,23 +118,27 @@ def createModel ( modelType = 'LSTM', seqSize=1, featureSize=1 ):
 		model.compile(loss='mean_squared_error', optimizer='adam')
 		model.summary()
 	elif (modelType == 'SVR') :
-		svr_rbf = SVR(kernel='rbf', C=100, gamma=0.1, epsilon=.1)
-		svr_lin = SVR(kernel='linear', C=100, gamma='auto')
-		svr_poly = SVR(kernel='poly', C=100, gamma='auto', degree=3, epsilon=.1,
+		svr_rbf = SVR(kernel='rbf', C=100, gamma='auto', epsilon=.1)
+		svr_lin = SVR(kernel='linear', C=100, gamma='scale', coef0=0.1)
+		svr_poly = SVR(kernel='poly', C=20, gamma='scale', degree=3, epsilon=.1,
 					   coef0=1)
 		model = svr_lin
 	elif (modelType == 'SVM') :
-		svm_rbf = SVC(kernel='rbf', C=100, gamma=0.1 )
-		svm_lin = SVC(kernel='linear', C=100, gamma='auto')
-		svm_poly = SVC(kernel='poly', C=100, gamma='auto', degree=3, coef0=1)
+		svm_rbf = SVC(kernel='rbf', C=20, gamma='scale' )
+		svm_lin = SVC(kernel='linear', C=20, gamma='scale', coef0=0.1)
+		svm_poly = SVC(kernel='poly', C=100, gamma='scale', degree=4, coef0=0.0)
 
 		model = svm_poly
-
+	elif (modelType == 'GDB') :
+		model = GradientBoostingClassifier(loss='exponential',learning_rate=0.1,n_estimators=50)
+		#model = SGDClassifier(max_iter=2000, tol=1e-3)
+		#model = xgb.XGBClassifier(objective="binary:logistic", random_state=0,  eval_metric="auc")
 
 	return model
 # end createModel
 
 def trainModel ( modelType, model, trainX, trainY ):
+    print('Train start...')
 	if (modelType == 'LSTM') :
 		# reshape input to be [samples, time steps, features]
 		trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
@@ -145,7 +153,7 @@ def trainModel ( modelType, model, trainX, trainY ):
 		# reshape input to be [samples, time steps, features]
 		trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
 		trainY2 = utils.to_categorical(trainY, 2)
-		model.fit(trainX, trainY2, epochs=10, batch_size=10, verbose=2)
+		model.fit(trainX, trainY2, epochs=30, batch_size=200, verbose=2)
 	elif (modelType == 'SVR') :
 		trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1]))
 		trainY2 = np.reshape(trainY, (trainY.shape[0]))
@@ -154,6 +162,11 @@ def trainModel ( modelType, model, trainX, trainY ):
 		trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1]))
 		trainY2 = np.reshape(trainY, (trainY.shape[0]))
 		model.fit(trainX, trainY2)
+	elif (modelType == 'GDB') :
+		trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1]))
+		trainY2 = np.reshape(trainY, (trainY.shape[0]))
+		model.fit(trainX, trainY2)
+	print('Done')
 
 	return model
 # end trainModel
@@ -178,6 +191,10 @@ def testModel ( modelType, model, X ):
 		Pr = model.predict(X)
 		Pr = np.reshape(Pr, (Pr.shape[0], 1))
 	elif (modelType == 'SVM') :
+		X = np.reshape(X, (X.shape[0], X.shape[1]))
+		Pr = model.predict(X)
+		Pr = np.reshape(Pr, (Pr.shape[0], 1))
+	elif (modelType == 'GDB') :
 		X = np.reshape(X, (X.shape[0], X.shape[1]))
 		Pr = model.predict(X)
 		Pr = np.reshape(Pr, (Pr.shape[0], 1))
@@ -207,7 +224,7 @@ def calcReturn ( trainPredict, testPredict, data, ddata, look_back = 20 ):
 
 	###############################################################
 	# for test -- 
-	# at the very begin your account has 100$
+	# at the very beginning your account has 100$
 	#
 	for i in range(testPredict.shape[0]):
 		# at day i-1, right before the end of the day, the close price of the day i-1 is known
@@ -250,11 +267,17 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 	tstY =  np.reshape(testY, len(testY))
 
 	# calculate root mean squared error
-	if (modelType == "SVM") or (modelType == "LSTMC") or (modelType == "CNN"):
+	if (modelType == "SVM") or (modelType == "LSTMC") or (modelType == "CNN") or (modelType == "GDB"):
 		trainScore = 1-zero_one_loss(traY, traPredict)
 		print('Train accuracy: %.2f ' % (trainScore))
 		testScore = 1-zero_one_loss(tstY, tstPredict)
 		print('Test accuracy: %.2f ' % (testScore))
+		afile = sname + '-' + modelType + "-train-test-result.txt"
+		fd = open(afile, "w+")
+		fd.write("{0}\n".format(afile))
+		fd.write('Train accuracy: %.2f\n' % (trainScore))
+		fd.write('Test accuracy: %.2f\n' % (testScore))
+		fd.close()
 	else:
 		traPredict = np.reshape(scaler.inverse_transform(np.reshape(traPredict, (len(traPredict),1))), (len(traPredict)));
 		traY = np.reshape(scaler.inverse_transform(np.reshape(traY, (len(traY),1))), (len(traY)));
@@ -282,6 +305,7 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		plt.plot(ddata, 'b-' )
 		plt.plot(traPredictPlot, 'g--')
 		plt.plot(tstPredictPlot, 'r-')
+		plt.grid(which='minor')
 		plt.title ( sname + '-' + modelType + ' testScore {0}'.format(testScore)  )
 		plt.savefig ( sname + '-' + modelType + "-rate.jpg" )
 		plt.show()
@@ -328,10 +352,13 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 		# at the beging of the test period and never do anything again.
 
 		plt.figure(num=None, figsize=(8, 6), dpi=150);
-		plt.plot(srdata, 'b-', srPlot, 'r-' )
+		plt.plot(srdata, 'b-', label='market price' )
+		plt.plot(srPlot, 'r-', label='trade return' )
+		plt.grid(b=True, which='both')
+		plt.legend(loc='upper left')
 		plt.title ( sname + '-' + modelType + ' trade return {0:.2f}% vs market return {1:.2f}%'.format(rtest[-1]-100, rettsdata*100 ) )
 		plt.savefig ( sname + '-' + modelType + "-rate-price.jpeg" )
-		plt.show()
+		#plt.show()
         
 		copy, colors = [], []
 		bt = colorConverter.to_rgba('r')
@@ -385,22 +412,34 @@ def showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, dat
 
 start="1990-01-01"
 sname = 'AAPL'
-#sname = '^GSPC'
-look_back = 20
+sname = 'MSFT'
+sname = '^GSPC'
+look_back = 15
 modelType = 'LSTM'
 # modelType = 'SVR'
 modelType = 'SVM'
 #modelType = 'LSTMC'
 # modelType = 'CNN'
+#modelType = 'GDB' # gradient boosting
 
-trainX, trainY, testX, testY, data, ddata, scaler = create_sample(modelType, look_back=look_back, start=start, sname=sname)
+mtype = ["SVM", "LSTMC", "CNN", "GDB" ]
+mtype = ["LSTMC", "CNN", "GDB" ]
+mtype = ["SVM" ]
+sym = ["AAPL", "MSFT", "^GSPC"]
+sym = ["^GSPC"]
 
-model = createModel ( modelType, seqSize=look_back )
-model = trainModel ( modelType, model, trainX, trainY )
 
-# make predictions
-trainPredict = testModel ( modelType, model, trainX )
-testPredict = testModel ( modelType, model, testX)
 
-showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, data, ddata, scaler, look_back=20 )
+for modelType in mtype:
+	for sname in sym:
+		print(modelType)
+		print(sname)
+		trainX, trainY, testX, testY, data, ddata, scaler = create_sample(modelType, sname=sname, look_back=look_back, start=start)
+		model = createModel ( modelType, seqSize=look_back )
+		model = trainModel ( modelType, model, trainX, trainY )
+		# make predictions
+		trainPredict = testModel ( modelType, model, trainX )
+		testPredict = testModel ( modelType, model, testX)
+		showResult ( sname, modelType, trainPredict, testPredict, trainY, testY, data, ddata, scaler, look_back=look_back )
+#end
 
